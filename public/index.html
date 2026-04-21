@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Expense Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f0f0f;
+      --surface:   #1a1a1a;
+      --border:    #2a2a2a;
+      --accent:    #c8f135;
+      --accent2:   #f1c835;
+      --text:      #f0f0f0;
+      --muted:     #888;
+      --danger:    #ff5c5c;
+      --success:   #4ade80;
+      --radius:    10px;
+      --font-head: 'Syne', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      padding: 0;
+    }
+
+    /* ── Layout ── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 10;
+    }
+
+    header h1 {
+      font-family: var(--font-head);
+      font-weight: 800;
+      font-size: 1.4rem;
+      letter-spacing: -0.5px;
+    }
+
+    header h1 span { color: var(--accent); }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      display: inline-block;
+      margin-right: 8px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 24px;
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 768px) {
+      main { grid-template-columns: 1fr; }
+      header { padding: 16px; }
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+
+    .card-title {
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+
+    /* ── Form ── */
+    .form-group { margin-bottom: 16px; }
+
+    label {
+      display: block;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      padding: 10px 12px;
+      transition: border-color 0.15s;
+      outline: none;
+      appearance: none;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+    }
+
+    input.error, select.error { border-color: var(--danger); }
+
+    .field-error {
+      color: var(--danger);
+      font-size: 0.72rem;
+      margin-top: 4px;
+      display: none;
+    }
+
+    .field-error.visible { display: block; }
+
+    textarea { resize: vertical; min-height: 72px; }
+
+    select option { background: var(--surface); }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      background: var(--accent);
+      color: #0f0f0f;
+      border: none;
+      border-radius: 6px;
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      margin-top: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    .btn:hover:not(:disabled) { opacity: 0.88; }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-family: var(--font-mono);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.25s, transform 0.25s;
+      z-index: 100;
+      pointer-events: none;
+      max-width: 320px;
+    }
+
+    #toast.show { opacity: 1; transform: translateY(0); }
+    #toast.success { background: var(--success); color: #0f0f0f; }
+    #toast.error   { background: var(--danger);  color: #fff; }
+
+    /* ── Right panel ── */
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .total-badge {
+      font-family: var(--font-head);
+      font-weight: 800;
+      font-size: 1.5rem;
+      color: var(--accent);
+    }
+
+    .total-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+    }
+
+    /* ── Filters ── */
+    .filters {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .filters select {
+      width: auto;
+      flex: 1;
+      min-width: 140px;
+      font-size: 0.82rem;
+      padding: 8px 12px;
+    }
+
+    /* ── Expense list ── */
+    #expense-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .expense-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4px 16px;
+      align-items: center;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .expense-desc {
+      font-size: 0.9rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .expense-meta {
+      font-size: 0.75rem;
+      color: var(--muted);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .category-pill {
+      background: var(--border);
+      color: var(--text);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .expense-amount {
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--accent2);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .expense-date {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      padding: 48px 0;
+      color: var(--muted);
+      font-size: 0.85rem;
+      display: none;
+    }
+
+    .empty-state.visible { display: block; }
+
+    /* ── Loading skeleton ── */
+    .skeleton {
+      background: linear-gradient(90deg, var(--border) 25%, #333 50%, var(--border) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s infinite;
+      border-radius: 8px;
+      height: 64px;
+    }
+
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── Summary section ── */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .summary-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .summary-cat {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .summary-amt {
+      font-family: var(--font-head);
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>expense<span>.</span>track</h1>
+  <div style="font-size:0.8rem; color: var(--muted);">
+    <span class="status-dot"></span>live
+  </div>
+</header>
+
+<main>
+  <!-- ── Add Expense Form ── -->
+  <div class="card">
+    <p class="card-title">New Expense</p>
+    <form id="expense-form" novalidate>
+
+      <div class="form-group">
+        <label for="amount">Amount (₹)</label>
+        <input type="number" id="amount" name="amount" placeholder="0.00" min="0.01" step="0.01" autocomplete="off" />
+        <p class="field-error" id="err-amount"></p>
+      </div>
+
+      <div class="form-group">
+        <label for="category">Category</label>
+        <select id="category" name="category">
+          <option value="">Select category…</option>
+          <option>Food</option>
+          <option>Transport</option>
+          <option>Shopping</option>
+          <option>Health</option>
+          <option>Entertainment</option>
+          <option>Utilities</option>
+          <option>Other</option>
+        </select>
+        <p class="field-error" id="err-category"></p>
+      </div>
+
+      <div class="form-group">
+        <label for="description">Description</label>
+        <textarea id="description" name="description" placeholder="What was this for?"></textarea>
+        <p class="field-error" id="err-description"></p>
+      </div>
+
+      <div class="form-group">
+        <label for="date">Date</label>
+        <input type="date" id="date" name="date" />
+        <p class="field-error" id="err-date"></p>
+      </div>
+
+      <button type="submit" class="btn" id="submit-btn">Add Expense</button>
+    </form>
+  </div>
+
+  <!-- ── Expense List Panel ── -->
+  <div>
+    <!-- Summary -->
+    <div class="card" id="summary-card" style="margin-bottom:16px; display:none;">
+      <p class="card-title">By Category</p>
+      <div class="summary-grid" id="summary-grid"></div>
+    </div>
+
+    <div class="card">
+      <div class="panel-header">
+        <div>
+          <p class="total-label">Showing Total</p>
+          <p class="total-badge" id="total-display">₹0.00</p>
+        </div>
+        <div style="font-size:0.78rem; color:var(--muted);" id="count-display"></div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters">
+        <select id="filter-category" title="Filter by category">
+          <option value="all">All Categories</option>
+        </select>
+        <select id="filter-sort" title="Sort by date">
+          <option value="date_desc">Date: Newest First</option>
+          <option value="date_asc">Date: Oldest First</option>
+        </select>
+      </div>
+
+      <!-- List -->
+      <div id="expense-list"></div>
+      <div class="empty-state" id="empty-state">No expenses found.</div>
+    </div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+  // ── Config ──────────────────────────────────────────────────────────────────
+  // In production, replace with actual API URL
+  const API_BASE = window.location.origin;
+
+  // ── State ────────────────────────────────────────────────────────────────────
+  let allExpenses   = [];
+  let isSubmitting  = false;
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  /** Generate a UUID v4 for idempotency keys */
+  function generateUUID() {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+    });
+  }
+
+  /** Format number as Indian Rupee string */
+  function formatINR(amount) {
+    return "₹" + parseFloat(amount).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  /** Show toast notification */
+  function showToast(message, type = "success") {
+    const toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.className = `show ${type}`;
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => { toast.className = ""; }, 3000);
+  }
+
+  /** Show/hide field error */
+  function setFieldError(fieldId, message) {
+    const el = document.getElementById(`err-${fieldId}`);
+    const input = document.getElementById(fieldId);
+    if (message) {
+      el.textContent = message;
+      el.classList.add("visible");
+      input && input.classList.add("error");
+    } else {
+      el.classList.remove("visible");
+      input && input.classList.remove("error");
+    }
+  }
+
+  function clearAllErrors() {
+    ["amount", "category", "description", "date"].forEach((f) => setFieldError(f, ""));
+  }
+
+  // ── Form submission ──────────────────────────────────────────────────────────
+
+  // Set today's date as default
+  document.getElementById("date").value = new Date().toISOString().split("T")[0];
+
+  // Each form load generates a fresh idempotency key.
+  // This key is reset only after a successful submission.
+  let currentIdempotencyKey = generateUUID();
+
+  document.getElementById("expense-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (isSubmitting) return; // Prevent double submit
+
+    clearAllErrors();
+
+    const amount      = document.getElementById("amount").value.trim();
+    const category    = document.getElementById("category").value.trim();
+    const description = document.getElementById("description").value.trim();
+    const date        = document.getElementById("date").value.trim();
+
+    // Client-side validation
+    let hasError = false;
+
+    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      setFieldError("amount", "Enter a valid positive amount");
+      hasError = true;
+    }
+    if (!category) {
+      setFieldError("category", "Please select a category");
+      hasError = true;
+    }
+    if (!description) {
+      setFieldError("description", "Description is required");
+      hasError = true;
+    }
+    if (!date) {
+      setFieldError("date", "Date is required");
+      hasError = true;
+    }
+
+    if (hasError) return;
+
+    // Disable button to prevent double submission
+    isSubmitting = true;
+    const btn = document.getElementById("submit-btn");
+    btn.disabled = true;
+    btn.textContent = "Adding…";
+
+    try {
+      const res = await fetch(`${API_BASE}/expenses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount,
+          category,
+          description,
+          date,
+          idempotency_key: currentIdempotencyKey,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        // Server-side validation errors
+        if (data.errors && Array.isArray(data.errors)) {
+          data.errors.forEach((err) => {
+            if (err.includes("amount"))      setFieldError("amount", err);
+            else if (err.includes("category")) setFieldError("category", err);
+            else if (err.includes("description")) setFieldError("description", err);
+            else if (err.includes("date"))    setFieldError("date", err);
+          });
+          showToast("Please fix the errors above", "error");
+        } else {
+          showToast("Something went wrong. Please try again.", "error");
+        }
+        return;
+      }
+
+      // Success
+      showToast("Expense added ✓");
+
+      // Reset form, generate new idempotency key for next submission
+      document.getElementById("expense-form").reset();
+      document.getElementById("date").value = new Date().toISOString().split("T")[0];
+      currentIdempotencyKey = generateUUID();
+
+      // Refresh list
+      await loadExpenses();
+
+    } catch (err) {
+      console.error("Submit error:", err);
+      showToast("Network error. Please check your connection.", "error");
+    } finally {
+      isSubmitting = false;
+      btn.disabled = false;
+      btn.textContent = "Add Expense";
+    }
+  });
+
+  // ── Load & render expenses ───────────────────────────────────────────────────
+
+  async function loadExpenses() {
+    const category = document.getElementById("filter-category").value;
+    const sort     = document.getElementById("filter-sort").value;
+
+    const params = new URLSearchParams();
+    if (category && category !== "all") params.set("category", category);
+    params.set("sort", sort);
+
+    // Show skeletons while loading
+    const list = document.getElementById("expense-list");
+    list.innerHTML = `<div class="skeleton"></div><div class="skeleton" style="opacity:.6"></div><div class="skeleton" style="opacity:.3"></div>`;
+
+    try {
+      const res  = await fetch(`${API_BASE}/expenses?${params}`);
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        showToast("Failed to load expenses", "error");
+        return;
+      }
+
+      allExpenses = data.expenses;
+      renderExpenses(allExpenses, data.total);
+      populateCategoryFilter(data.categories);
+      renderSummary(allExpenses);
+
+    } catch (err) {
+      console.error("Load error:", err);
+      list.innerHTML = "";
+      showToast("Network error loading expenses", "error");
+    }
+  }
+
+  function renderExpenses(expenses, total) {
+    const list   = document.getElementById("expense-list");
+    const empty  = document.getElementById("empty-state");
+    const totalEl = document.getElementById("total-display");
+    const countEl = document.getElementById("count-display");
+
+    list.innerHTML = "";
+
+    if (expenses.length === 0) {
+      empty.classList.add("visible");
+      totalEl.textContent = "₹0.00";
+      countEl.textContent = "";
+      return;
+    }
+
+    empty.classList.remove("visible");
+    totalEl.textContent = formatINR(total);
+    countEl.textContent = `${expenses.length} expense${expenses.length !== 1 ? "s" : ""}`;
+
+    expenses.forEach((exp) => {
+      const item = document.createElement("div");
+      item.className = "expense-item";
+      item.innerHTML = `
+        <div>
+          <div class="expense-desc" title="${escapeHtml(exp.description)}">${escapeHtml(exp.description)}</div>
+          <div class="expense-meta">
+            <span class="category-pill">${escapeHtml(exp.category)}</span>
+          </div>
+        </div>
+        <div>
+          <div class="expense-amount">${formatINR(exp.amount)}</div>
+          <div class="expense-date">${formatDate(exp.date)}</div>
+        </div>
+      `;
+      list.appendChild(item);
+    });
+  }
+
+  function renderSummary(expenses) {
+    const card = document.getElementById("summary-card");
+    const grid = document.getElementById("summary-grid");
+
+    if (expenses.length === 0) {
+      card.style.display = "none";
+      return;
+    }
+
+    // Aggregate by category using integer paise to avoid float errors
+    const byCategory = {};
+    expenses.forEach((e) => {
+      const paise = Math.round(parseFloat(e.amount) * 100);
+      byCategory[e.category] = (byCategory[e.category] || 0) + paise;
+    });
+
+    grid.innerHTML = Object.entries(byCategory)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat, paise]) => `
+        <div class="summary-item">
+          <div class="summary-cat">${escapeHtml(cat)}</div>
+          <div class="summary-amt">${formatINR(paise / 100)}</div>
+        </div>
+      `).join("");
+
+    card.style.display = "block";
+  }
+
+  function populateCategoryFilter(categories) {
+    const sel = document.getElementById("filter-category");
+    const current = sel.value;
+
+    // Keep "All Categories" option
+    sel.innerHTML = `<option value="all">All Categories</option>`;
+    categories.forEach((cat) => {
+      const opt = document.createElement("option");
+      opt.value = cat;
+      opt.textContent = cat;
+      if (cat === current) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
+  // ── Filter change ─────────────────────────────────────────────────────────
+  document.getElementById("filter-category").addEventListener("change", loadExpenses);
+  document.getElementById("filter-sort").addEventListener("change", loadExpenses);
+
+  // ── Utilities ─────────────────────────────────────────────────────────────
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function formatDate(dateStr) {
+    const [y, m, d] = dateStr.split("-");
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${parseInt(d)} ${months[parseInt(m) - 1]} ${y}`;
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  loadExpenses();
+</script>
+</body>
+</html>
