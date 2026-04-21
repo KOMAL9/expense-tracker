@@ -4,7 +4,7 @@ A minimal full-stack personal expense tracker built with Node.js, Express, SQLit
 
 ## Live Demo
 
-> Deployed on Render: [https://your-app.onrender.com](https://your-app.onrender.com)
+> Deployed on Render: [https://expense-tracker-porq.onrender.com](https://expense-tracker-porq.onrender.com)
 
 ---
 
@@ -46,7 +46,7 @@ No bundler, no framework, no build step. The entire UI is one `public/index.html
 
 ---
 
-## Trade-offs (due to timebox)
+## Trade-offs 
 
 - **No authentication** — this is a personal tool assumed to be single-user
 - **SQLite instead of PostgreSQL** — SQLite resets on Render free-tier redeploys; a production system would use a managed DB (e.g., Supabase, PlanetScale, Render PostgreSQL)
