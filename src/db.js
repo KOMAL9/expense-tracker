@@ -1,60 +1,66 @@
-const Database = require("better-sqlite3");
 const path = require("path");
+const fs   = require("fs");
 
-const DB_PATH = path.join(__dirname, "expenses.db");
+const initSqlJs = require("sql.js");
 
-const db = new Database(DB_PATH);
+const DB_PATH = path.join(__dirname, "..", "expenses.db");
 
-// Enable WAL mode for better concurrent read performance
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+let db;
 
-// Create expenses table
-// amount stored as INTEGER in paise (1 INR = 100 paise) to avoid floating point issues
-db.exec(`
-  CREATE TABLE IF NOT EXISTS expenses (
-    id          TEXT PRIMARY KEY,
-    amount      INTEGER NOT NULL CHECK(amount > 0),
-    category    TEXT NOT NULL,
-    description TEXT NOT NULL,
-    date        TEXT NOT NULL,
-    created_at  TEXT NOT NULL,
-    idempotency_key TEXT UNIQUE
-  );
+async function initDb() {
+  const SQL = await initSqlJs();
 
-  CREATE INDEX IF NOT EXISTS idx_expenses_date     ON expenses(date DESC);
-  CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
-  CREATE INDEX IF NOT EXISTS idx_idempotency_key   ON expenses(idempotency_key);
-`);
-
-/**
- * Insert a new expense.
- * Returns the created expense or the existing one if idempotency_key matches.
- * Amount is expected in paise (integer).
- */
-function createExpense({ id, amount, category, description, date, created_at, idempotency_key }) {
-  // Check idempotency: if same key exists, return existing record
-  if (idempotency_key) {
-    const existing = db
-      .prepare("SELECT * FROM expenses WHERE idempotency_key = ?")
-      .get(idempotency_key);
-    if (existing) return { expense: formatExpense(existing), created: false };
+  if (fs.existsSync(DB_PATH)) {
+    const fileBuffer = fs.readFileSync(DB_PATH);
+    db = new SQL.Database(fileBuffer);
+  } else {
+    db = new SQL.Database();
   }
 
-  const stmt = db.prepare(`
-    INSERT INTO expenses (id, amount, category, description, date, created_at, idempotency_key)
-    VALUES (@id, @amount, @category, @description, @date, @created_at, @idempotency_key)
+  db.run(`
+    CREATE TABLE IF NOT EXISTS expenses (
+      id              TEXT PRIMARY KEY,
+      amount          INTEGER NOT NULL CHECK(amount > 0),
+      category        TEXT NOT NULL,
+      description     TEXT NOT NULL,
+      date            TEXT NOT NULL,
+      created_at      TEXT NOT NULL,
+      idempotency_key TEXT UNIQUE
+    );
+    CREATE INDEX IF NOT EXISTS idx_expenses_date     ON expenses(date);
+    CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category);
+    CREATE INDEX IF NOT EXISTS idx_idempotency_key   ON expenses(idempotency_key);
   `);
 
-  stmt.run({ id, amount, category, description, date, created_at, idempotency_key });
-
-  const expense = db.prepare("SELECT * FROM expenses WHERE id = ?").get(id);
-  return { expense: formatExpense(expense), created: true };
+  persistDb();
+  console.log("Database initialised at", DB_PATH);
 }
 
-/**
- * Get expenses with optional category filter and date sort.
- */
+function persistDb() {
+  const data = db.export();
+  fs.writeFileSync(DB_PATH, Buffer.from(data));
+}
+
+function createExpense({ id, amount, category, description, date, created_at, idempotency_key }) {
+  if (idempotency_key) {
+    const existing = db.exec("SELECT * FROM expenses WHERE idempotency_key = ?", [idempotency_key]);
+    if (existing.length > 0 && existing[0].values.length > 0) {
+      return { expense: rowToExpense(existing[0].columns, existing[0].values[0]), created: false };
+    }
+  }
+
+  db.run(
+    `INSERT INTO expenses (id, amount, category, description, date, created_at, idempotency_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, amount, category, description, date, created_at, idempotency_key || null]
+  );
+
+  persistDb();
+
+  const result = db.exec("SELECT * FROM expenses WHERE id = ?", [id]);
+  return { expense: rowToExpense(result[0].columns, result[0].values[0]), created: true };
+}
+
 function getExpenses({ category, sort } = {}) {
   let query = "SELECT * FROM expenses";
   const params = [];
@@ -64,35 +70,31 @@ function getExpenses({ category, sort } = {}) {
     params.push(category);
   }
 
-  // Default to newest first; support explicit asc
   const order = sort === "date_asc" ? "ASC" : "DESC";
   query += ` ORDER BY date ${order}, created_at ${order}`;
 
-  const rows = db.prepare(query).all(...params);
-  return rows.map(formatExpense);
+  const result = db.exec(query, params);
+  if (!result.length) return [];
+  return result[0].values.map((row) => rowToExpense(result[0].columns, row));
 }
 
-/**
- * Get distinct categories for filter dropdown.
- */
 function getCategories() {
-  const rows = db.prepare("SELECT DISTINCT category FROM expenses ORDER BY category ASC").all();
-  return rows.map((r) => r.category);
+  const result = db.exec("SELECT DISTINCT category FROM expenses ORDER BY category ASC");
+  if (!result.length) return [];
+  return result[0].values.map((r) => r[0]);
 }
 
-/**
- * Convert DB row to API-friendly format.
- * Converts paise back to rupees as a string to preserve precision.
- */
-function formatExpense(row) {
+function rowToExpense(columns, values) {
+  const row = {};
+  columns.forEach((col, i) => { row[col] = values[i]; });
   return {
-    id: row.id,
-    amount: (row.amount / 100).toFixed(2),   // paise → rupees, always 2 decimal places
-    category: row.category,
+    id:          row.id,
+    amount:      (row.amount / 100).toFixed(2),
+    category:    row.category,
     description: row.description,
-    date: row.date,
-    created_at: row.created_at,
+    date:        row.date,
+    created_at:  row.created_at,
   };
 }
 
-module.exports = { createExpense, getExpenses, getCategories };
+module.exports = { initDb, createExpense, getExpenses, getCategories };

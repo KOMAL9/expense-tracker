@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const { v4: uuidv4 } = require("uuid");
-const { createExpense, getExpenses, getCategories } = require("./src/db");
+const { initDb, createExpense, getExpenses, getCategories } = require("./src/db");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -134,8 +134,13 @@ app.get("*", (_req, res) => {
 });
 
 // ─── Start server ─────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`Expense Tracker API running on port ${PORT}`);
+initDb().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Expense Tracker API running on port ${PORT}`);
+  });
+}).catch((err) => {
+  console.error("Failed to initialise database:", err);
+  process.exit(1);
 });
 
 module.exports = app;
